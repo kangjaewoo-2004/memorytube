@@ -30,7 +30,7 @@ function LoginFormInner() {
               email,
               password,
               options: {
-                emailRedirectTo: `${window.location.origin}/dashboard`
+                emailRedirectTo: getEmailRedirectTo()
               }
             });
 
@@ -128,5 +128,26 @@ function getSafeNextPath(value: string | null) {
     return "/dashboard";
   }
 
-  return value;
+  try {
+    const baseUrl = "https://memorytube.local";
+    const url = new URL(value, baseUrl);
+
+    if (url.origin !== baseUrl) {
+      return "/dashboard";
+    }
+
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return "/dashboard";
+  }
+}
+
+function getEmailRedirectTo() {
+  const url = new URL("/dashboard", window.location.origin);
+
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("Invalid app origin for auth redirect.");
+  }
+
+  return url.toString();
 }
