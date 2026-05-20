@@ -1,15 +1,13 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, Suspense, useState } from "react";
+import { useRouter } from "next/navigation";
+import { FormEvent, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
 
 function LoginFormInner() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const next = getSafeNextPath(searchParams.get("next"));
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,8 +23,14 @@ function LoginFormInner() {
       const supabase = createClient();
       const authResponse =
         mode === "login"
-          ? await supabase.auth.signInWithPassword({ email, password })
-          : await supabase.auth.signUp({ email, password });
+          ? await supabase.auth.signInWithPassword({
+              email,
+              password
+            })
+          : await supabase.auth.signUp({
+              email,
+              password
+            });
 
       if (authResponse.error) {
         setMessage(authResponse.error.message);
@@ -34,11 +38,12 @@ function LoginFormInner() {
       }
 
       if (mode === "signup" && !authResponse.data.session) {
-        setMessage("Check your email to finish creating the account.");
+        setMode("login");
+        setMessage("Account created. Please log in.");
         return;
       }
 
-      router.push(next);
+      router.push("/dashboard");
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Login failed.");
@@ -110,28 +115,5 @@ function LoginFormInner() {
 }
 
 export function LoginForm() {
-  return (
-    <Suspense fallback={null}>
-      <LoginFormInner />
-    </Suspense>
-  );
-}
-
-function getSafeNextPath(value: string | null) {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) {
-    return "/dashboard";
-  }
-
-  try {
-    const baseUrl = "https://memorytube.local";
-    const url = new URL(value, baseUrl);
-
-    if (url.origin !== baseUrl) {
-      return "/dashboard";
-    }
-
-    return `${url.pathname}${url.search}${url.hash}`;
-  } catch {
-    return "/dashboard";
-  }
+  return <LoginFormInner />;
 }
