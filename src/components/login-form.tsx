@@ -26,13 +26,7 @@ function LoginFormInner() {
       const authResponse =
         mode === "login"
           ? await supabase.auth.signInWithPassword({ email, password })
-          : await supabase.auth.signUp({
-              email,
-              password,
-              options: {
-                emailRedirectTo: getEmailRedirectTo()
-              }
-            });
+          : await supabase.auth.signUp({ email, password });
 
       if (authResponse.error) {
         setMessage(authResponse.error.message);
@@ -140,12 +134,4 @@ function getSafeNextPath(value: string | null) {
   } catch {
     return "/dashboard";
   }
-}
-
-function getEmailRedirectTo() {
-  if (window.location.protocol !== "http:" && window.location.protocol !== "https:") {
-    throw new Error("Invalid app origin for auth redirect.");
-  }
-
-  return `${window.location.origin}/dashboard`;
 }
