@@ -143,11 +143,9 @@ function getSafeNextPath(value: string | null) {
 }
 
 function getEmailRedirectTo() {
-  const url = new URL("/dashboard", window.location.origin);
-
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
+  if (window.location.protocol !== "http:" && window.location.protocol !== "https:") {
     throw new Error("Invalid app origin for auth redirect.");
   }
 
-  return url.toString();
+  return `${window.location.origin}/dashboard`;
 }
