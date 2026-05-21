@@ -39,7 +39,14 @@ export async function storeVideoChunks(
   const chunks = splitIntoChunks(input.summary, input.transcript);
   const model = getOpenAIEmbeddingModel();
 
-  await supabase.from("video_chunks").delete().eq("video_id", input.videoId);
+  const { error: deleteError } = await supabase
+    .from("video_chunks")
+    .delete()
+    .eq("video_id", input.videoId);
+
+  if (deleteError) {
+    throw new Error(`Supabase video_chunks delete failed: ${deleteError.message}`);
+  }
 
   const rows = [];
 
@@ -63,7 +70,7 @@ export async function storeVideoChunks(
   if (rows.length > 0) {
     const { error } = await supabase.from("video_chunks").insert(rows);
     if (error) {
-      throw error;
+      throw new Error(`Supabase video_chunks insert failed: ${error.message}`);
     }
   }
 }

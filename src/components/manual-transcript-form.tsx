@@ -4,6 +4,11 @@ import { Loader2, Wand2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
+type ManualTranscriptResponse = {
+  error?: string;
+  stage?: string;
+};
+
 export function ManualTranscriptForm({ videoId }: { videoId: string }) {
   const router = useRouter();
   const [transcript, setTranscript] = useState("");
@@ -21,10 +26,12 @@ export function ManualTranscriptForm({ videoId }: { videoId: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ transcript })
       });
-      const data = await response.json();
+      const data = (await response.json().catch(() => ({
+        error: `Server returned ${response.status} without a JSON error body.`
+      }))) as ManualTranscriptResponse;
 
       if (!response.ok) {
-        throw new Error(data.error || "Could not summarize transcript.");
+        throw new Error(formatApiError(data.error || "Could not summarize transcript.", data.stage));
       }
 
       setTranscript("");
@@ -76,4 +83,8 @@ export function ManualTranscriptForm({ videoId }: { videoId: string }) {
       </button>
     </form>
   );
+}
+
+function formatApiError(message: string, stage?: string) {
+  return stage ? `[${stage}] ${message}` : message;
 }

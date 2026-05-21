@@ -3,6 +3,12 @@ const YOUTUBE_ID_LENGTH = 11;
 export type YouTubeMetadata = {
   title: string | null;
   thumbnailUrl: string | null;
+  error?: string | null;
+};
+
+export type YouTubeTranscriptResult = {
+  transcript: string | null;
+  error?: string | null;
 };
 
 export function extractYouTubeVideoId(input: string) {
@@ -60,7 +66,12 @@ export async function fetchYouTubeMetadata(
     );
 
     if (!response.ok) {
-      return { title: null, thumbnailUrl: fallbackThumbnail };
+      const message = `YouTube metadata request failed with HTTP ${response.status}.`;
+      console.error("[MemoryTube YouTube metadata] Fetch failed.", {
+        videoId,
+        message
+      });
+      return { title: null, thumbnailUrl: fallbackThumbnail, error: message };
     }
 
     const data = (await response.json()) as {
@@ -72,12 +83,25 @@ export async function fetchYouTubeMetadata(
       title: data.title || null,
       thumbnailUrl: data.thumbnail_url || fallbackThumbnail
     };
-  } catch {
-    return { title: null, thumbnailUrl: fallbackThumbnail };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[MemoryTube YouTube metadata] Fetch failed.", {
+      videoId,
+      message
+    });
+    return { title: null, thumbnailUrl: fallbackThumbnail, error: message };
   }
 }
 
 export async function fetchYouTubeTranscript(videoId: string) {
+  const result = await fetchYouTubeTranscriptResult(videoId);
+
+  return result.transcript;
+}
+
+export async function fetchYouTubeTranscriptResult(
+  videoId: string
+): Promise<YouTubeTranscriptResult> {
   try {
     const { YoutubeTranscript } = await import("youtube-transcript");
     const rows = await YoutubeTranscript.fetchTranscript(videoId);
@@ -87,9 +111,15 @@ export async function fetchYouTubeTranscript(videoId: string) {
       .replace(/\s+/g, " ")
       .trim();
 
-    return transcript.length > 0 ? transcript : null;
-  } catch {
-    return null;
+    return { transcript: transcript.length > 0 ? transcript : null };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[MemoryTube YouTube transcript] Fetch failed.", {
+      videoId,
+      message
+    });
+
+    return { transcript: null, error: message };
   }
 }
 

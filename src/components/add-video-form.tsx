@@ -6,6 +6,19 @@ import { FormEvent, useState } from "react";
 
 type SavePhase = "idle" | "saving" | "transcript" | "summary" | "needs_transcript" | "complete";
 
+type SaveVideoResponse = {
+  duplicate?: boolean;
+  error?: string;
+  message?: string;
+  stage?: string;
+  step?: string;
+  details?: unknown;
+  video?: {
+    id?: string;
+    status?: string;
+  };
+};
+
 const steps = [
   {
     id: "saving",
@@ -51,10 +64,23 @@ export function AddVideoForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url, manualTranscript })
       });
-      const data = await response.json();
+      const data = await readSaveVideoResponse(response);
 
       if (!response.ok) {
-        throw new Error(getFriendlyError(data.error || "Could not save video."));
+        throw new Error(formatApiError(data, response.status));
+      }
+
+      if (!data.video?.id) {
+        throw new Error(
+          formatApiError(
+            {
+              step: "response_missing_video_id",
+              message: "Video save response did not include a video id.",
+              details: data
+            },
+            response.status
+          )
+        );
       }
 
       timers.forEach((timer) => window.clearTimeout(timer));
@@ -71,9 +97,27 @@ export function AddVideoForm() {
       }
 
       await wait(550);
-      router.push(`/videos/${data.video.id}`);
-      router.refresh();
+      try {
+        router.push(`/videos/${data.video.id}`);
+        router.refresh();
+      } catch (error) {
+        console.error("[MemoryTube dashboard refresh failed]", error);
+        throw new Error(
+          formatApiError(
+            {
+              step: "dashboard_refresh_failed",
+              message:
+                error instanceof Error
+                  ? error.message
+                  : "Dashboard refresh failed after saving the video.",
+              details: { videoId: data.video.id }
+            },
+            response.status
+          )
+        );
+      }
     } catch (error) {
+      console.error("[MemoryTube video save UI error]", error);
       setMessage(error instanceof Error ? error.message : "Could not save video.");
       setPhase("idle");
     } finally {
@@ -167,7 +211,7 @@ export function AddVideoForm() {
       ) : null}
 
       {message ? (
-        <p className="mt-4 rounded-md border border-line bg-paper px-3 py-2 text-sm leading-6 text-neutral-700">
+        <p className="mt-4 whitespace-pre-wrap rounded-md border border-line bg-paper px-3 py-2 text-sm leading-6 text-neutral-700">
           {message}
         </p>
       ) : null}
@@ -207,20 +251,49 @@ function getStepState(phase: SavePhase, stepId: (typeof steps)[number]["id"]) {
   return "idle";
 }
 
-function getFriendlyError(message: string) {
-  if (message.includes("No transcript")) {
-    return "공개 자막을 찾지 못했어요. 영상 상세 화면에서 transcript를 직접 붙여넣어 주세요.";
+async function readSaveVideoResponse(response: Response): Promise<SaveVideoResponse> {
+  const text = await response.text();
+
+  if (!text) {
+    return {
+      step: "empty_response",
+      message: `Server returned HTTP ${response.status} with an empty response.`
+    };
   }
 
-  if (message.includes("OPENAI") || message.includes("OpenAI")) {
-    return "AI 요약 중 문제가 생겼어요. OpenAI API 키, 모델 설정, 결제 상태를 확인해 주세요.";
+  try {
+    return JSON.parse(text) as SaveVideoResponse;
+  } catch {
+    return {
+      step: "non_json_response",
+      message: `Server returned HTTP ${response.status} with a non-JSON response.`,
+      details: { bodyPreview: text.slice(0, 500) }
+    };
+  }
+}
+
+function formatApiError(data: SaveVideoResponse, status: number) {
+  const step = data.step || data.stage || "unknown_step";
+  const message = data.message || data.error || `Request failed with HTTP ${status}.`;
+  const lines = [`Step: ${step}`, `Message: ${message}`];
+
+  if (data.details !== undefined) {
+    lines.push(`Details: ${formatDetails(data.details)}`);
   }
 
-  if (message.includes("YouTube URL")) {
-    return "YouTube 링크 형식을 확인해 주세요.";
+  return lines.join("\n");
+}
+
+function formatDetails(details: unknown) {
+  if (typeof details === "string") {
+    return details;
   }
 
-  return message;
+  try {
+    return JSON.stringify(details, null, 2);
+  } catch {
+    return String(details);
+  }
 }
 
 function wait(ms: number) {
